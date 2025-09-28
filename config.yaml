@@ -1,0 +1,13 @@
+# Configuration for Agentic RAG system
+chunking:
+  method: docling
+graphdb:
+  uri: bolt://localhost:7687
+  user: neo4j
+  password: password
+sqldb:
+  uri: sqlite:///rag.db
+nosqldb:
+  uri: mongodb://localhost:27017/
+web_agent:
+  enabled: true

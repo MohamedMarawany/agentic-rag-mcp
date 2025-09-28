@@ -1,0 +1,20 @@
+# Core dependencies
+pyyaml
+openai
+numpy
+langdetect
+transformers
+torch
+ollama
+
+# Databases
+sqlalchemy
+pymongo
+neo4j
+
+# PDF processing
+docling
+PyPDF2
+
+# (Optional) For faiss/embeddings, add:
+# faiss-cpu
