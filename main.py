@@ -1,3 +1,4 @@
+from pydantic import validator
 import yaml
 from agentic_rag.chunking import Chunker
 from agentic_rag.graphdb import GraphDB
@@ -106,37 +107,31 @@ def main():
     nosqldb = NoSQLDatabase(config['nosqldb']['uri'])
     # Web Agent
     agent = WebSearchAgent() if config['web_agent']['enabled'] else None
-    # MCP Orchestrator
-    orchestrator = MCPOrchestrator()
-    # Validator
+    # Validator (fix: define before use)
     validator = AnswerValidator()
-    # Arabic Benchmark
-    benchmark = ArabicRAGBenchmark()
+    # MCP Orchestrator with LLM selection logic
+    def llm_func(context, question):
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if openai_api_key:
+            return ask_with_llm(context, question, openai_api_key)
+        elif OLLAMA_AVAILABLE:
+            return ask_with_ollama(context, question, model="mistral")
+        else:
+            return ask_with_transformers(context, question)
+
+    orchestrator = MCPOrchestrator(chunker=chunker, validator=validator, llm_func=llm_func)
 
     # PDF loading demo
     pdf_path = r'files\questions_english.pdf'  # Change to your PDF file name
     pdf_loader = PDFLoader(pdf_path)
     pdf_text = pdf_loader.load_text()
-    # print(f"Loaded PDF text (first 500 chars): {pdf_text[:500]}")
-    # Improved chunking for QA
-    pdf_chunks = split_into_chunks(pdf_text, chunk_size=350, overlap=50)
-    # print(f"PDF Chunks: {pdf_chunks[:3]}")  # Show first 3 chunks
-    # Example: Ask a question about the PDF
     question = input("Enter your question about the PDF: ")
     print(f"Q: {question}")
-    # Retrieve top N relevant chunks
-    top_chunks = retrieve_top_chunks(pdf_chunks, question, top_n=2)
-    context = ' '.join(top_chunks) if top_chunks else pdf_chunks[0]
-    # print(f"Context for QA: {context[:300]}...")
-    # LLM answer (uses OpenAI if available, else local model, else Ollama if running)
-    openai_api_key = os.getenv('OPENAI_API_KEY')
-    if openai_api_key:
-        llm_answer, model_name = ask_with_llm(context, question, openai_api_key)
-    elif OLLAMA_AVAILABLE:
-        llm_answer, model_name = ask_with_ollama(context, question, model="mistral")
-    else:
-        llm_answer, model_name = ask_with_transformers(context, question)
-    print(f"[{model_name} Answer]: {llm_answer}")
+    result = orchestrator.run(pdf_text, question, top_n=2)
+    print(f"[MCP] Model: {result['model']}")
+    # print(f"[MCP] Context: {result['context'][:300]}...")
+    print(f"[MCP] Answer: {result['answer']}")
+    print(f"[MCP] Valid: {result['valid']}")
 
     # Example usage
     # doc = "Your document text here."
