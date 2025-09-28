@@ -122,7 +122,7 @@ def main():
     orchestrator = MCPOrchestrator(chunker=chunker, validator=validator, llm_func=llm_func)
 
     # PDF loading demo
-    pdf_path = r'files\questions_english.pdf'  # Change to your PDF file name
+    pdf_path = r'files\questions.pdf'  # Change to your PDF file name
     pdf_loader = PDFLoader(pdf_path)
     pdf_text = pdf_loader.load_text()
     question = input("Enter your question about the PDF: ")
