@@ -59,6 +59,7 @@ files/*.pdf
 # Misc
 *.bak
 *.swp
+rag.db
 *.tmp
 
 # Ignore secrets

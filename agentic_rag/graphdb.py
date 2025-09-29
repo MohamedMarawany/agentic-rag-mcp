@@ -46,6 +46,6 @@ class GraphDB:
         try:
             with self.driver.session() as session:
                 session.run(f"CREATE (n:{label} $props)", props=properties)
-            logger.info(f"Added node with label {label} and properties {properties}")
+            # logger.info(f"Added node with label {label} and properties {properties}")
         except Exception as e:
             logger.error(f"Failed to add node: {e}")

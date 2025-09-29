@@ -122,16 +122,16 @@ def main():
 
         # Show all Q&A from SQL or NoSQL and exit if requested
         if args.show_sql:
-            records = sqldb.get_all_qa()
-            print("\n--- All Q&A from SQL Database ---")
-            for rec in records:
-                print(f"ID: {rec.get('id')} | Q: {rec.get('question')} | A: {rec.get('answer')} | Model: {rec.get('model')} | Valid: {rec.get('valid')} | Time: {rec.get('timestamp')}")
+            # records = sqldb.get_all_qa()
+            # print("\n--- All Q&A from SQL Database ---")
+            # for rec in records:
+            #     print(f"ID: {rec.get('id')} | Q: {rec.get('question')} | A: {rec.get('answer')} | Model: {rec.get('model')} | Valid: {rec.get('valid')} | Time: {rec.get('timestamp')} | File: {rec.get('source_file')}")
             return
         if args.show_nosql:
-            records = nosqldb.get_all_qa()
-            print("\n--- All Q&A from MongoDB ---")
-            for rec in records:
-                print(f"Q: {rec.get('question')} | A: {rec.get('answer')} | Model: {rec.get('model')} | Valid: {rec.get('valid')} | Time: {rec.get('timestamp')}")
+            # records = nosqldb.get_all_qa()
+            # print("\n--- All Q&A from MongoDB ---")
+            # for rec in records:
+            #     print(f"Q: {rec.get('question')} | A: {rec.get('answer')} | Model: {rec.get('model')} | Valid: {rec.get('valid')} | Time: {rec.get('timestamp')} | File: {rec.get('source_file')}")
             return
 
         pdf_loader = PDFLoader(args.pdf)
@@ -141,7 +141,38 @@ def main():
             return
         question = args.question or input("Enter your question about the PDF: ")
         logging.info(f"Question: {question}")
+
         result = orchestrator.run(pdf_text, question, top_n=2)
+        # Fallback: If answer is not found in the PDF, use WebSearchAgent
+
+        answer_text = result['answer'].strip()
+        answer_lower = answer_text.lower()
+        not_found_phrases = [
+            'not found', 'does not contain', 'no information', 'no mention', 'cannot find',
+            'no data', 'no answer', 'no relevant', 'no details', 'no record',
+            'the text provided does not mention', 'no content', 'no result', 'irrelevant',
+            'no such', 'no evidence', 'no reference', 'no context', 'no description',
+            'no explanation', 'no such information', 'no such data', 'no such answer',
+        ]
+        generic_answers = [
+            '', 'n/a', 'none', 'no', 'unknown', 'not applicable', 'not available', 'no response',
+        ]
+        use_web_search = False
+        # Trigger fallback if answer is empty, generic, or contains any not-found phrase
+        if answer_lower in generic_answers or not answer_text:
+            use_web_search = True
+        else:
+            for phrase in not_found_phrases:
+                if phrase in answer_lower:
+                    use_web_search = True
+                    break
+        if use_web_search and agent is not None:
+            print("[MCP] No relevant answer found in PDF or LLM. Using WebSearchAgent fallback...")
+            logging.info("Answer not found in PDF or LLM. Using WebSearchAgent fallback.")
+            web_answer, web_source = agent.search(question)
+            result['answer'] = web_answer
+            result['model'] = web_source
+            print(f"[WebSearch] Answer: {web_answer}")
         print(f"[MCP] Model: {result['model']}")
         print(f"[MCP] Answer: {result['answer']}")
         print(f"[MCP] Valid: {result['valid']}")
@@ -158,7 +189,7 @@ def main():
                 'valid': result.get('valid', False)
             }
             graphdb.add_node('QAInteraction', node_properties)
-            logging.info("Stored Q&A interaction in Neo4j GraphDB.")
+            # logging.info("Stored Q&A interaction in Neo4j GraphDB.")
         except Exception as e:
             logging.error(f"Failed to store Q&A in GraphDB: {e}")
 
@@ -168,7 +199,8 @@ def main():
                 question=question,
                 answer=result.get('answer', ''),
                 model=result.get('model', ''),
-                valid=result.get('valid', False)
+                valid=result.get('valid', False),
+                source_file=args.pdf
             )
         except Exception as e:
             logging.error(f"Failed to store Q&A in SQL DB: {e}")
@@ -177,7 +209,8 @@ def main():
                 question=question,
                 answer=result.get('answer', ''),
                 model=result.get('model', ''),
-                valid=result.get('valid', False)
+                valid=result.get('valid', False),
+                source_file=args.pdf
             )
         except Exception as e:
             logging.error(f"Failed to store Q&A in MongoDB: {e}")

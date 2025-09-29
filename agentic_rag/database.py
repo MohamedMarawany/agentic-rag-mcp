@@ -1,9 +1,9 @@
-
 # SQL/NoSQL database integration
 import logging
 from typing import Any
 from sqlalchemy import create_engine
 from pymongo import MongoClient
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -40,31 +40,34 @@ class SQLDatabase:
             answer TEXT,
             model TEXT,
             valid BOOLEAN,
-            timestamp TEXT
+            timestamp TEXT,
+            source_file TEXT
         );
         """
         with self.engine.connect() as conn:
             conn.execute(text(create_table_sql))
 
-    def save_qa(self, question: str, answer: str, model: str, valid: bool):
+    def save_qa(self, question: str, answer: str, model: str, valid: bool, source_file: str = None):
         """Save a Q&A record to the SQL database."""
         insert_sql = text("""
-            INSERT INTO qa_records (question, answer, model, valid, timestamp)
-            VALUES (:question, :answer, :model, :valid, :timestamp)
+            INSERT INTO qa_records (question, answer, model, valid, timestamp, source_file)
+            VALUES (:question, :answer, :model, :valid, :timestamp, :source_file)
         """)
-        with self.engine.connect() as conn:
+        from datetime import datetime
+        with self.engine.begin() as conn:  # begin() ensures commit
             conn.execute(insert_sql, {
                 'question': question,
                 'answer': answer,
                 'model': model,
                 'valid': valid,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.utcnow().isoformat(),
+                'source_file': source_file or ''
             })
             logger.info("Saved Q&A to SQL database.")
 
     def get_all_qa(self):
         """Retrieve all Q&A records from the SQL database."""
-        select_sql = text("SELECT id, question, answer, model, valid, timestamp FROM qa_records")
+        select_sql = text("SELECT id, question, answer, model, valid, timestamp, source_file FROM qa_records")
         with self.engine.connect() as conn:
             result = conn.execute(select_sql)
             return [dict(row) for row in result]
@@ -93,16 +96,18 @@ class NoSQLDatabase:
             self.db = None
             self.collection = None
 
-    def save_qa(self, question: str, answer: str, model: str, valid: bool):
+
+    def save_qa(self, question: str, answer: str, model: str, valid: bool, source_file: str = None):
         """Save a Q&A record to the NoSQL database."""
         from datetime import datetime
-        if self.collection:
+        if self.collection is not None:
             self.collection.insert_one({
                 'question': question,
                 'answer': answer,
                 'model': model,
                 'valid': valid,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.utcnow().isoformat(),
+                'source_file': source_file or ''
             })
             logger.info("Saved Q&A to MongoDB.")
 
@@ -111,3 +116,9 @@ class NoSQLDatabase:
         if self.collection:
             return list(self.collection.find({}, {'_id': 0}))
         return []
+
+# # Example code to read from SQLite database
+# conn = sqlite3.connect('rag.db')
+# rows = conn.execute('SELECT * FROM qa_records').fetchall()
+# print(rows)
+# conn.close()
