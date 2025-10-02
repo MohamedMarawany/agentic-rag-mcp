@@ -45,7 +45,13 @@ def get_llm_func():
     def ask_with_llm(chunk, question, openai_api_key):
         try:
             openai.api_key = openai_api_key
-            prompt = f"Answer the following question based on the provided text.\n\nText:\n{chunk}\n\nQuestion: {question}\nAnswer:"
+            # Improved prompt for time/date reasoning
+            prompt = (
+                "Answer the following question based on the provided text. "
+                "If the question is about working hours, days, or times, reason step by step and be precise. "
+                "\n\nText:\n{chunk}\n\nQuestion: {question}\nAnswer:"
+            )
+            prompt = prompt.format(chunk=chunk, question=question)
             response = openai.Completion.create(
                 engine="gpt-3.5-turbo-instruct",
                 prompt=prompt,
@@ -139,6 +145,14 @@ def main():
         if not pdf_text:
             logging.error(f"Failed to extract text from PDF: {args.pdf}")
             return
+        
+        # --- Show chunking step ---
+        chunks = chunker.chunk(pdf_text)
+        print("\n--- Chunking Preview ---")
+        for i, ch in enumerate(chunks, 1):
+            print(f"\n[Chunk {i}] {ch[:1000]}...")  # only show first 1000 chars
+        print(f"\nTotal chunks created: {len(chunks)}")
+
         question = args.question or input("Enter your question about the PDF: ")
         logging.info(f"Question: {question}")
 
@@ -179,17 +193,41 @@ def main():
         if 'error' in result:
             logging.error(f"Pipeline error: {result['error']}")
 
-        # --- GraphDB Integration: Store Q&A interaction ---
+        # --- GraphDB Integration: Store Q&A interaction and link to previous ---
         try:
+            from datetime import datetime
             node_properties = {
                 'question': question,
                 'answer': result.get('answer', ''),
                 'context': result.get('context', ''),
                 'model': result.get('model', ''),
-                'valid': result.get('valid', False)
+                'valid': result.get('valid', False),
+                'timestamp': datetime.utcnow().isoformat()
             }
             graphdb.add_node('QAInteraction', node_properties)
-            # logging.info("Stored Q&A interaction in Neo4j GraphDB.")
+
+            # Link to previous QAInteraction node (by most recent timestamp)
+            # (Assumes only one user/session is writing at a time)
+            try:
+                with graphdb.driver.session() as session:
+                    prev = session.run(
+                        """
+                        MATCH (n:QAInteraction)
+                        WHERE n.timestamp < $now
+                        RETURN n.timestamp AS ts
+                        ORDER BY n.timestamp DESC LIMIT 1
+                        """,
+                        now=node_properties['timestamp']
+                    ).single()
+                    if prev:
+                        prev_ts = prev['ts']
+                        graphdb.add_relationship(
+                            from_label='QAInteraction', from_key='timestamp', from_value=prev_ts,
+                            to_label='QAInteraction', to_key='timestamp', to_value=node_properties['timestamp'],
+                            rel_type='NEXT'
+                        )
+            except Exception as e:
+                logging.error(f"Failed to link QAInteraction nodes: {e}")
         except Exception as e:
             logging.error(f"Failed to store Q&A in GraphDB: {e}")
 

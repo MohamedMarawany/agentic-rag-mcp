@@ -1,20 +1,24 @@
 # Core dependencies
-pyyaml
-openai
-numpy
-langdetect
-transformers
-torch
-ollama
+pyyaml>=6.0
+openai==0.28
+numpy>=1.26.0
+langdetect>=1.0.9
+transformers>=4.44.0
+torch>=2.2.0
+ollama>=0.1.0
 
 # Databases
-sqlalchemy
-pymongo
-neo4j
+sqlalchemy>=2.0.0
+pymongo>=4.7.0
+neo4j>=5.19.0
 
-# PDF processing
-docling
-PyPDF2
+# PDF processing (compatibility for Docling 0.3.x)
+docling==0.3.0
+docling-core==0.2.0
+deepsearch-glm==0.23.0
+deepsearch-toolkit==0.47.0
+pywin32==306
+PyPDF2>=3.0.1
 
-# (Optional) For faiss/embeddings, add:
-# faiss-cpu
+# (Optional) For faiss/embeddings
+faiss-cpu>=1.7.4
