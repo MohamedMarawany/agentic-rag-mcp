@@ -48,22 +48,26 @@ class SQLDatabase:
             conn.execute(text(create_table_sql))
 
     def save_qa(self, question: str, answer: str, model: str, valid: bool, source_file: str = None):
-        """Save a Q&A record to the SQL database."""
+        """Save a Q&A record to the SQL database. Logs full error and data if insert fails."""
         insert_sql = text("""
             INSERT INTO qa_records (question, answer, model, valid, timestamp, source_file)
             VALUES (:question, :answer, :model, :valid, :timestamp, :source_file)
         """)
         from datetime import datetime
-        with self.engine.begin() as conn:  # begin() ensures commit
-            conn.execute(insert_sql, {
-                'question': question,
-                'answer': answer,
-                'model': model,
-                'valid': valid,
-                'timestamp': datetime.utcnow().isoformat(),
-                'source_file': source_file or ''
-            })
-            logger.info("Saved Q&A to SQL database.")
+        data = {
+            'question': question,
+            'answer': answer,
+            'model': model,
+            'valid': valid,
+            'timestamp': datetime.utcnow().isoformat(),
+            'source_file': source_file or ''
+        }
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(insert_sql, data)
+                logger.info("Saved Q&A to SQL database.")
+        except Exception as e:
+            logger.error(f"Failed to save Q&A to SQL database: {e}\nData: {data}")
 
     def get_all_qa(self):
         """Retrieve all Q&A records from the SQL database."""
@@ -117,8 +121,3 @@ class NoSQLDatabase:
             return list(self.collection.find({}, {'_id': 0}))
         return []
 
-# # Example code to read from SQLite database
-# conn = sqlite3.connect('rag.db')
-# rows = conn.execute('SELECT * FROM qa_records').fetchall()
-# print(rows)
-# conn.close()
